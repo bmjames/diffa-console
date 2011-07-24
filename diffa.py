@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 import json
 import datetime
+import httplib
 import logging
 from restful_lib import Connection
 import sys
@@ -29,14 +30,12 @@ class DiffsClient(object):
             agent_url += "/"
         self.agent_url = agent_url
         base_url = urljoin(agent_url, 'rest')
-        self.conn = Connection(base_url)
-        self.conn = Connection(self.get_session_url())
+        self._conn = Connection(base_url)
+        self._conn = Connection(self.get_session_url())
 
     def get_session_url(self):
         url = '/diffs/sessions'
-        self._logger.debug("Getting session URL from %s", self._rebuild_url(url))
-        response = self.conn.request_post(url)
-        self._logger.debug("Got response: %s", response)
+        response = self._post(url)
         return response['headers']['location']
 
     def get_diffs(self, pair_key, range_start, range_end):
@@ -44,9 +43,7 @@ class DiffsClient(object):
                 pair_key,
                 range_start.strftime(DATETIME_FORMAT),
                 range_end.strftime(DATETIME_FORMAT))
-        self._logger.debug("Getting diffs from %s", self._rebuild_url(url))
-        response = self.conn.request_get(url)
-        self._logger.debug("Got response: %s", response)
+        response = self._get(url)
         return json.loads(response['body'])
 
     def get_diffs_zoomed(self, range_start, range_end, bucketing):
@@ -55,14 +52,23 @@ class DiffsClient(object):
                 range_start.strftime(DATETIME_FORMAT),
                 range_end.strftime(DATETIME_FORMAT),
                 bucketing)
-        self._logger.debug("Getting zoomed diff view from %s",
-                self._rebuild_url(url))
-        response = self.conn.request_get(url)
-        self._logger.debug("Got response: %s", response)
+        response = self._get(url)
         return json.loads(response['body'])
 
+    def _get(self, url):
+        self._logger.debug("GET %s", self._rebuild_url(url))
+        response = self._conn.request_get(url)
+        self._logger.debug(response)
+        return response
+    
+    def _post(self, url):
+        self._logger.debug("POST %s", self._rebuild_url(url))
+        response = self._conn.request_post(url)
+        self._logger.debug(response)
+        return response
+
     def _rebuild_url(self, url):
-        return self.conn.url.geturl() + url
+        return self._conn.url.geturl() + url
 
     def __repr__(self):
         return "DiffsClient(%s)" % repr(self.agent_url)
