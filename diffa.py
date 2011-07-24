@@ -25,8 +25,8 @@ class DiffsClient(object):
 
     def __init__(self, agent_url, verbose=False):
         self._logger.setLevel(logging.DEBUG if verbose else logging.NOTSET)
-        if agent_url[-1] != "/":
-            agent_url += "/"
+        if not agent_url.endswith('/'):
+            agent_url += '/'
         self.agent_url = agent_url
         base_url = urljoin(agent_url, 'rest')
         self._conn = Connection(base_url)
