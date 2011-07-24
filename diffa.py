@@ -39,13 +39,24 @@ class DiffsClient(object):
         self._logger.debug("Got response: %s", response)
         return response['headers']['location']
 
-    def get_diffs(self, range_start, range_end, bucketing):
+    def get_diffs(self, pair_key, range_start, range_end):
+        url = '/?pairKey={0}&range-start={1}&range-end={2}'.format(
+                pair_key,
+                range_start.strftime(DATETIME_FORMAT),
+                range_end.strftime(DATETIME_FORMAT))
+        self._logger.debug("Getting diffs from %s", self._rebuild_url(url))
+        response = self.conn.request_get(url)
+        self._logger.debug("Got response: %s", response)
+        return json.loads(response['body'])
+
+    def get_diffs_zoomed(self, range_start, range_end, bucketing):
         "A dictionary of pair keys mapped to lists of bucketed diffs"
         url = '/zoom?range-start={0}&range-end={1}&bucketing={2}'.format(
                 range_start.strftime(DATETIME_FORMAT),
                 range_end.strftime(DATETIME_FORMAT),
                 bucketing)
-        self._logger.debug("Getting diffs from %s", self._rebuild_url(url))
+        self._logger.debug("Getting zoomed diff view from %s",
+                self._rebuild_url(url))
         response = self.conn.request_get(url)
         self._logger.debug("Got response: %s", response)
         return json.loads(response['body'])
@@ -55,6 +66,29 @@ class DiffsClient(object):
 
     def __repr__(self):
         return "DiffsClient(%s)" % repr(self.agent_url)
+            
+def list_diffs(args):
+    client = DiffsClient(args.agent_url, args.verbose)
+    
+    start_time = datetime.datetime.strptime(args.start_time, DATETIME_FORMAT)
+    end_time = datetime.datetime.strptime(args.end_time, DATETIME_FORMAT)
+    
+    diffs = client.get_diffs(args.pair_key, start_time, end_time)
+    for diff in diffs:
+        data = (describe_match_state(diff),
+                diff['objId']['id'],
+                diff['upstreamVsn'],
+                diff['downstreamVsn'],
+                diff['detectedAt'])
+        print " ".join(unicode(datum) or "-" for datum in data)
+        
+def describe_match_state(entity):
+    "md (missing from downstream), mu (missing from upstream) or dd (data diff)"
+    if entity['downstreamVsn'] is None:
+        return "md"
+    if entity['upstreamVsn'] is None:
+        return "mu"
+    return "dd"
 
 def format_y_label(pair_key, width=LABEL_WIDTH):
     return pair_key[0:width-1].ljust(width)
@@ -74,12 +108,16 @@ def shade(count):
             return char
     return " "
 
-def show_heatmap(client, start_time, end_time, width):
-    bucketing = calculate_bucketing(width, start_time, end_time)
-    diffs = client.get_diffs(start_time, end_time, bucketing)
+def show_heatmap(args):
+    client = DiffsClient(args.agent_url, args.verbose)
+    
+    start_time = datetime.datetime.strptime(args.start_time, DATETIME_FORMAT)
+    end_time = datetime.datetime.strptime(args.end_time, DATETIME_FORMAT)
+    bucketing = calculate_bucketing(args.width, start_time, end_time)
+    diffs = client.get_diffs_zoomed(start_time, end_time, bucketing)
 
-    swimlane_boundary = "-" * width
-    print_time_axis(width, start_time, end_time)
+    swimlane_boundary = "-" * args.width
+    print_time_axis(args.width, start_time, end_time)
     for pair_key, diffs in diffs.iteritems():
         print swimlane_boundary
         print format_y_label(pair_key) + "".join(shade(count) for count in diffs)
@@ -100,34 +138,42 @@ def calculate_bucketing(width, start_time, end_time):
     timespan = end_time - start_time
     return int((timespan / heatmap_width).total_seconds())
 
+def add_common_args_to(parser):
+    add_arg = parser.add_argument
+    
+    default_end_time = round_up_to_hour(datetime.datetime.utcnow())
+    default_start_time = default_end_time - datetime.timedelta(hours=21)
+    add_arg('agent_url', metavar='AGENT', help='the base URL of the agent')
+    add_arg('--from', dest='start_time', metavar='FROM',
+            type=str, default=default_start_time.strftime(DATETIME_FORMAT),
+            help='show diffs from this UTC time (default: 21 hours before FROM)')
+    add_arg('--until', dest='end_time', metavar='UNTIL',
+            default=default_end_time.strftime(DATETIME_FORMAT),
+            help='show diffs until this UTC time (default: now)')
+
+    add_arg('-v', dest='verbose', action='store_true', help='show HTTP activity')
+
 def main():
     from argparse import ArgumentParser
 
     parser = ArgumentParser(description='Console UI for Diffa')
-    add_arg = parser.add_argument
+    subparsers = parser.add_subparsers(help='sub-command')
 
-    add_arg('agent_url', metavar='URL', type=str, help='the base URL of the agent')
-
-    default_end_time = round_up_to_hour(datetime.datetime.utcnow())
-    default_start_time = default_end_time - datetime.timedelta(hours=21)
-    add_arg('--from', dest='start_time', metavar='FROM',
-            type=str, default=default_start_time.strftime(DATETIME_FORMAT),
-            help='show diffs from this UTC time (default: 21 hours before FROM)')
-    add_arg('--until', dest='end_time', metavar='UNTIL', type=str,
-            default=default_end_time.strftime(DATETIME_FORMAT),
-            help='show diffs until this UTC time (default: now)')
-
-    add_arg('-w', dest='width', metavar='WIDTH', type=int, default=DEFAULT_WIDTH,
+    heatmap_parser = subparsers.add_parser('heatmap',
+            help='show differences heatmap')
+    heatmap_parser.set_defaults(func=show_heatmap)
+    add_common_args_to(heatmap_parser)
+    heatmap_parser.add_argument('-w', dest='width', metavar='WIDTH', type=int,
+            default=DEFAULT_WIDTH,
             help='width (in characters) of output (default: 80)')
-    add_arg('-v', dest='verbose', action='store_true', help='show HTTP activity')
+
+    diffs_parser = subparsers.add_parser('diffs', help='list diffs')
+    diffs_parser.set_defaults(func=list_diffs)
+    add_common_args_to(diffs_parser)
+    diffs_parser.add_argument('pair_key', metavar='PAIR', help='pair key')
 
     args = parser.parse_args()
-
-    client = DiffsClient(args.agent_url, args.verbose)
-    
-    start_time = datetime.datetime.strptime(args.start_time, DATETIME_FORMAT)
-    end_time = datetime.datetime.strptime(args.end_time, DATETIME_FORMAT)
-    show_heatmap(client, start_time, end_time, args.width)
+    args.func(args)
 
 if __name__ == '__main__':
     main()
