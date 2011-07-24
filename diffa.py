@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 import json
 import datetime
-import httplib
 import logging
 from restful_lib import Connection
 import sys
@@ -152,7 +151,7 @@ def add_common_args_to(parser):
     add_arg('agent_url', metavar='AGENT', help='the base URL of the agent')
     add_arg('--from', dest='start_time', metavar='FROM',
             type=str, default=default_start_time.strftime(DATETIME_FORMAT),
-            help='show diffs from this UTC time (default: 21 hours before FROM)')
+            help='show diffs from this UTC time (default: 21 hours ago)')
     add_arg('--until', dest='end_time', metavar='UNTIL',
             default=default_end_time.strftime(DATETIME_FORMAT),
             help='show diffs until this UTC time (default: now)')
