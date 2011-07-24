@@ -9,9 +9,11 @@ from urlparse import urljoin
 
 DATETIME_FORMAT = '%Y%m%dT%H%M%SZ'
 
-LIGHT_SHADE = u'░'
-MED_SHADE = u'▒'
-DARK_SHADE = u'▓'
+SHADE_THRESHOLDS = {
+    1: u'░',
+    4: u'▒',
+    10: u'▓'
+}
 
 DEFAULT_WIDTH = 80
 LABEL_WIDTH = 10
@@ -67,13 +69,10 @@ def round_up_to_hour(date_time):
     return round_down_to_hour(date_time) + datetime.timedelta(hours=1)    
 
 def shade(count):
-    if not count:
-        return " "
-    if count < 3:
-        return LIGHT_SHADE
-    if count < 10:
-        return MED_SHADE
-    return DARK_SHADE
+    for threshold, char in reversed(sorted(SHADE_THRESHOLDS.iteritems())):
+        if count >= threshold:
+            return char
+    return " "
 
 def show_heatmap(client, start_time, end_time, width):
     bucketing = calculate_bucketing(width, start_time, end_time)
