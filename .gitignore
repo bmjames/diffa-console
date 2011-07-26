@@ -1,4 +1,6 @@
 *.pyc
 .cache
 *.swp
+dist
+MANIFEST
 
