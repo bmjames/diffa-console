@@ -1,2 +1,6 @@
 Console client for Diffa
 
+Requires Python 2.7 and python-rest-client:
+
+  http://code.google.com/p/python-rest-client/
+
