@@ -10,6 +10,7 @@ SHADE_THRESHOLDS = {
 }
 
 DEFAULT_WIDTH = 80
+DEFAULT_HOURS = 21
 LABEL_WIDTH = 10
 
 def list_diffs(args):
@@ -87,11 +88,11 @@ def add_common_args_to(parser):
     add_arg = parser.add_argument
     
     default_end_time = round_up_to_hour(datetime.datetime.utcnow())
-    default_start_time = default_end_time - datetime.timedelta(hours=21)
+    default_start_time = default_end_time - datetime.timedelta(hours=DEFAULT_HOURS)
     add_arg('agent_url', metavar='AGENT', help='the base URL of the agent')
     add_arg('--from', dest='start_time', metavar='FROM',
             type=str, default=strftime(default_start_time),
-            help='show diffs from this UTC time (default: 21 hours ago)')
+            help='show diffs from this UTC time (default: {0} hours ago)'.format(DEFAULT_HOURS))
     add_arg('--until', dest='end_time', metavar='UNTIL',
             default=strftime(default_end_time),
             help='show diffs until this UTC time (default: now)')
